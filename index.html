@@ -1,0 +1,249 @@
+```html
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR-kód olvasó</title>
+
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #111827, #1e3a8a);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            padding: 25px;
+            border-radius: 20px;
+            background: #1f2937;
+            box-shadow: 0 10px 40px #0005;
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #60a5fa;
+        }
+
+        #reader {
+            width: 100%;
+            overflow: hidden;
+            border-radius: 12px;
+            background: white;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .stop {
+            background: #dc2626;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: #111827;
+            overflow-wrap: anywhere;
+            text-align: left;
+        }
+
+        #result a {
+            color: #60a5fa;
+        }
+
+        #status {
+            color: #d1d5db;
+            font-size: 14px;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>📷 QR-kód olvasó</h1>
+        <p id="status">Nyomd meg a kamera indításához!</p>
+
+        <div id="reader"></div>
+
+        <button onclick="startScanner()">
+            Kamera indítása
+        </button>
+
+        <button class="stop" onclick="stopScanner()">
+            Kamera leállítása
+        </button>
+
+        <h3>Vagy olvass be egy képet:</h3>
+        <input
+            type="file"
+            id="qr-image"
+            accept="image/*"
+            onchange="scanImage(event)"
+        >
+
+        <div id="result">
+            <strong>Beolvasott eredmény:</strong>
+            <p id="output">Még nincs beolvasott QR-kód.</p>
+        </div>
+
+        <button onclick="copyResult()">
+            Eredmény másolása
+        </button>
+
+        <button onclick="openResult()">
+            Link megnyitása
+        </button>
+    </div>
+
+    <script>
+        const scanner = new Html5Qrcode("reader");
+        let running = false;
+        let lastResult = "";
+
+        async function startScanner() {
+            if (running) return;
+
+            try {
+                document.getElementById("status").textContent =
+                    "Kamera indítása...";
+
+                await scanner.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }
+                    },
+                    (decodedText) => {
+                        showResult(decodedText);
+                        stopScanner();
+                    },
+                    () => {}
+                );
+
+                running = true;
+                document.getElementById("status").textContent =
+                    "Irányítsd a kamerát a QR-kódra!";
+            } catch (error) {
+                document.getElementById("status").textContent =
+                    "Nem sikerült elindítani a kamerát. Ellenőrizd az engedélyeket, és használd HTTPS-en vagy localhoston.";
+                console.error(error);
+            }
+        }
+
+        async function stopScanner() {
+            if (!running) return;
+
+            try {
+                await scanner.stop();
+            } catch (error) {
+                console.error(error);
+            }
+
+            running = false;
+            document.getElementById("status").textContent =
+                "A kamera leállítva.";
+        }
+
+        function showResult(text) {
+            lastResult = text;
+
+            const output = document.getElementById("output");
+            output.replaceChildren();
+
+            if (/^https?:\/\//i.test(text)) {
+                const link = document.createElement("a");
+                link.href = text;
+                link.textContent = text;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                output.appendChild(link);
+            } else {
+                output.textContent = text;
+            }
+
+            document.getElementById("status").textContent =
+                "QR-kód sikeresen beolvasva!";
+        }
+
+        async function scanImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                if (running) await stopScanner();
+
+                const result = await scanner.scanFile(file, true);
+                showResult(result);
+            } catch (error) {
+                document.getElementById("status").textContent =
+                    "Nem található olvasható QR-kód a képen.";
+            }
+
+            event.target.value = "";
+        }
+
+        async function copyResult() {
+            if (!lastResult) {
+                alert("Még nincs mit másolni!");
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(lastResult);
+                alert("Az eredmény másolva!");
+            } catch (error) {
+                alert("A másolás nem sikerült. Próbáld biztonságos HTTPS-kapcsolaton.");
+            }
+        }
+
+        function openResult() {
+            if (!lastResult) {
+                alert("Előbb olvass be egy QR-kódot!");
+                return;
+            }
+
+            if (/^https?:\/\//i.test(lastResult)) {
+                window.open(lastResult, "_blank", "noopener,noreferrer");
+            } else {
+                alert("A beolvasott tartalom nem HTTP- vagy HTTPS-link.");
+            }
+        }
+    </script>
+</body>
+</html>
+```
